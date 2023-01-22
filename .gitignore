@@ -1,3 +1,6 @@
 .devcontainer/
+.vscode/
 build/
 test/build/
+
+*.gcov
