@@ -1,5 +1,15 @@
 #include "client.h"
 
+struct socket_api socket_api = {
+    .socket = socket,
+    .connect = connect,
+    .send = send,
+    .recv = recv,
+    .close = close,
+};
+
+struct socket_api *client = &socket_api;
+
 /*
 メモ:
 > socket()にPF_*、bind()にAF_*を使うべきらしい[^2]
@@ -11,12 +21,9 @@ PF_INETはprotocol family internetの略
 int createSocket()
 {
     int sock;
-    sock = socket(PF_INET, SOCK_STREAM, 0);
+    sock = client->socket(PF_INET, SOCK_STREAM, 0);
     if (sock < 0)
-    {
-        fprintf(stderr, "connect error\n");
         return -1;
-    }
 
     return sock;
 }
@@ -37,12 +44,9 @@ int connectServer(int sock, char *ip, int port)
     addr.sin_addr.s_addr = inet_addr(ip);
     addr.sin_port = htons(port);
     // 第二引数を`sockaddr`型にキャストする
-    conn = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
+    conn = client->connect(sock, (struct sockaddr *)&addr, sizeof(addr));
     if (conn < 0)
-    {
-        fprintf(stderr, "server connection error\n");
         return -1;
-    }
 
     return conn;
 }
@@ -68,10 +72,7 @@ int createRequestMessage(char *req_mesg, char *path, char *ip, int port)
     int req_size = strlen(req_mesg);
 
     if (req_size <= 0)
-    {
-        fprintf(stderr, "request message error\n");
         return -1;
-    }
 
     return req_size;
 }
@@ -81,13 +82,10 @@ int sendRequestMessage(int sock, char *req_mesg, int req_size)
     int send_size;
 
     // send()の第4引数のflagは送信時の動作の詳細設定を行う。
-    send_size = send(sock, req_mesg, req_size, 0);
+    send_size = client->send(sock, req_mesg, req_size, 0);
 
     if (send_size == -1)
-    {
-        fprintf(stderr, "send error\n");
         return -1;
-    }
 
     return send_size;
 }
@@ -98,12 +96,9 @@ int recvResponseMessage(int sock, char *res_mesg, int buf_size)
 
     while (1)
     {
-        int recv_size = recv(sock, &res_mesg[total_recv_size], buf_size, 0);
+        int recv_size = client->recv(sock, &res_mesg[total_recv_size], buf_size, 0);
         if (recv_size == -1)
-        {
-            fprintf(stderr, "recv error\n");
             return -1;
-        }
 
         if (recv_size == 0)
             break;
@@ -116,11 +111,8 @@ int recvResponseMessage(int sock, char *res_mesg, int buf_size)
 
 int closeServer(int sock)
 {
-    if (close(sock) == -1)
-    {
-        fprintf(stderr, "close error\n");
+    if (client->close(sock) == -1)
         return -1;
-    }
     else
         return 0;
 }
