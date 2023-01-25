@@ -45,7 +45,7 @@ ssize_t recvMock(int __fd, void *__buf, size_t __n, int __flags)
     .withParameter("mesg", __buf)
     .withIntParameter("size", __n)
     .withIntParameter("flags", __flags)
-    .returnIntValue();
+    .returnLongIntValue();
 }
 
 int closeMock(int __fd)
@@ -197,18 +197,26 @@ TEST(testWebClient, recvResMesgSuccess)
 {
     int sock = 1;
     char res_mesg[MAX_RESPONSE_SIZE];
+    ssize_t size = (ssize_t)sizeof(res_mesg);
+    int total_recv_size = 0;
 
     mock()
     .expectOneCall("recv")
     .withIntParameter("sock", sock)
-    .withParameter("mesg", &res_mesg)
+    .withParameter("mesg", (void *)&res_mesg[total_recv_size])
     .withIntParameter("size", MAX_RESPONSE_SIZE)
     .withIntParameter("flags", 0)
+    .andReturnValue(size);
+    // 2回目呼び出し。接続が正しく終了。
+    mock()
+    .expectOneCall("recv")
+    .ignoreOtherParameters()
     .andReturnValue(0);
-    
+
     int res_size = recvResponseMessage(sock, res_mesg, MAX_RESPONSE_SIZE);
 
-    CHECK_EQUAL(0, res_size);
+    total_recv_size += size;
+    CHECK_EQUAL(total_recv_size, res_size);
     mock().checkExpectations();
 }
 
@@ -216,11 +224,12 @@ TEST(testWebClient, recvResMesgFail)
 {
     int sock = 1;
     char res_mesg[MAX_RESPONSE_SIZE];
+    int total_recv_size = 0;
 
     mock()
     .expectOneCall("recv")
     .withIntParameter("sock", sock)
-    .withParameter("mesg", &res_mesg)
+    .withParameter("mesg", (void *)&res_mesg[total_recv_size])
     .withIntParameter("size", MAX_RESPONSE_SIZE)
     .withIntParameter("flags", 0)
     .andReturnValue(-1);
