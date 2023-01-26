@@ -31,7 +31,7 @@ ssize_t sendMock(int __fd, const void *__buf, size_t __n, int __flags)
     return mock()
     .actualCall("send")
     .withIntParameter("sock", __fd)
-    .withParameter("mesg", __buf)
+    .withParameter("req_mesg", __buf)
     .withIntParameter("size", __n)
     .withIntParameter("flags", __flags)
     .returnIntValue();
@@ -162,7 +162,7 @@ TEST(testWebClient, sendReqMesgSuccess)
     mock()
     .expectOneCall("send")
     .withIntParameter("sock", sock)
-    .withParameter("mesg", (const void *)req_mesg)
+    .withParameter("req_mesg", (const void *)req_mesg)
     .withIntParameter("size", req_size)
     .withIntParameter("flags", 0)
     .andReturnValue(60);
@@ -182,7 +182,7 @@ TEST(testWebClient, sendReqMesgFail)
     mock()
     .expectOneCall("send")
     .withIntParameter("sock", sock)
-    .withParameter("mesg", (const void *)req_mesg)
+    .withParameter("req_mesg", (const void *)req_mesg)
     .withIntParameter("size", req_size)
     .withIntParameter("flags", 0)
     .andReturnValue(-1);
@@ -265,6 +265,273 @@ TEST(testWebClient, closeServerFail)
 
     int st = closeServer(sock);
     CHECK_EQUAL(-1, st);
+    mock().checkExpectations();
+}
+
+TEST(testWebClient, doWebClientSocketFail)
+{
+    char *ip = "0.0.0.0";
+    int port = 8080;
+    char *path = "/";
+    char req_mesg[MAX_REQUEST_SIZE];
+    char res_mesg[MAX_RESPONSE_SIZE];
+
+    mock()
+    .expectOneCall("socket")
+    .withIntParameter("domain", PF_INET)
+    .withIntParameter("type", SOCK_STREAM)
+    .withIntParameter("protocol", 0)
+    .andReturnValue(-1);
+
+    int status = do_webclient(req_mesg, res_mesg, ip, port, path);
+    CHECK_EQUAL(SOCKET_CONNECTION_ERROR, status);
+    mock().checkExpectations();
+}
+
+TEST(testWebClient, doWebClientServerConnFail)
+{
+    char *ip = "0.0.0.0";
+    int port = 8080;
+    char *path = "/";
+    char req_mesg[MAX_REQUEST_SIZE];
+    char res_mesg[MAX_RESPONSE_SIZE];
+
+    mock()
+    .expectOneCall("socket")
+    .withIntParameter("domain", PF_INET)
+    .withIntParameter("type", SOCK_STREAM)
+    .withIntParameter("protocol", 0)
+    .andReturnValue(1);
+
+    struct sockaddr_in addr;
+    int sock = 1;
+    mock()
+    .expectOneCall("connect")
+    .withIntParameter("sock", sock)
+    .withIntParameter("addr.sin_family", AF_INET)
+    .withIntParameter("addr.sin_addr.s_addr", inet_addr(ip))
+    .withIntParameter("addr.sin_port", htons(port))
+    .withIntParameter("len", sizeof(addr))
+    .andReturnValue(-1);
+
+    int status = do_webclient(req_mesg, res_mesg, ip, port, path);
+    CHECK_EQUAL(SERVER_CONNECTION_ERROR, status);
+    mock().checkExpectations();
+}
+
+TEST(testWebClient, doWebClientSendReqMesgFail)
+{
+    char *ip = "0.0.0.0";
+    int port = 8080;
+    char *path = "/";
+    char req_mesg[MAX_REQUEST_SIZE];
+    char res_mesg[MAX_RESPONSE_SIZE];
+
+    mock()
+    .expectOneCall("socket")
+    .withIntParameter("domain", PF_INET)
+    .withIntParameter("type", SOCK_STREAM)
+    .withIntParameter("protocol", 0)
+    .andReturnValue(1);
+
+    struct sockaddr_in addr;
+    int sock = 1;
+    mock()
+    .expectOneCall("connect")
+    .withIntParameter("sock", sock)
+    .withIntParameter("addr.sin_family", AF_INET)
+    .withIntParameter("addr.sin_addr.s_addr", inet_addr(ip))
+    .withIntParameter("addr.sin_port", htons(port))
+    .withIntParameter("len", sizeof(addr))
+    .andReturnValue(1);
+
+    int req_size = 60;
+
+    mock()
+    .expectOneCall("send")
+    .withIntParameter("sock", sock)
+    .withParameter("req_mesg", (const void *)req_mesg)
+    .withIntParameter("size", req_size)
+    .withIntParameter("flags", 0)
+    .andReturnValue(-1);
+   
+    int status = do_webclient(req_mesg, res_mesg, ip, port, path);
+    CHECK_EQUAL(SEND_MESSAGE_ERROR, status);
+    mock().checkExpectations();
+}
+
+TEST(testWebClient, doWebClientCloseFail)
+{
+    char *ip = "0.0.0.0";
+    int port = 8080;
+    char *path = "/";
+    char req_mesg[MAX_REQUEST_SIZE];
+    char res_mesg[MAX_RESPONSE_SIZE];
+
+    mock()
+    .expectOneCall("socket")
+    .withIntParameter("domain", PF_INET)
+    .withIntParameter("type", SOCK_STREAM)
+    .withIntParameter("protocol", 0)
+    .andReturnValue(1);
+
+    struct sockaddr_in addr;
+    int sock = 1;
+    mock()
+    .expectOneCall("connect")
+    .withIntParameter("sock", sock)
+    .withIntParameter("addr.sin_family", AF_INET)
+    .withIntParameter("addr.sin_addr.s_addr", inet_addr(ip))
+    .withIntParameter("addr.sin_port", htons(port))
+    .withIntParameter("len", sizeof(addr))
+    .andReturnValue(1);
+
+    int req_size = 60;
+
+    mock()
+    .expectOneCall("send")
+    .withIntParameter("sock", sock)
+    .withParameter("req_mesg", (const void *)req_mesg)
+    .withIntParameter("size", req_size)
+    .withIntParameter("flags", 0)
+    .andReturnValue(60);
+   
+    int total_recv_size = 0;
+
+    mock()
+    .expectOneCall("recv")
+    .withIntParameter("sock", sock)
+    .withParameter("mesg", (void *)&res_mesg[total_recv_size])
+    .withIntParameter("size", MAX_RESPONSE_SIZE)
+    .withIntParameter("flags", 0)
+    .andReturnValue(-1);
+    
+    int status = do_webclient(req_mesg, res_mesg, ip, port, path);
+    CHECK_EQUAL(RECEIVE_MESSAGE_ERROR, status);
+    mock().checkExpectations();
+}
+
+TEST(testWebClient, doWebClientRecvResMesgFail)
+{
+    char *ip = "0.0.0.0";
+    int port = 8080;
+    char *path = "/";
+    char req_mesg[MAX_REQUEST_SIZE];
+    char res_mesg[MAX_RESPONSE_SIZE];
+
+    mock()
+    .expectOneCall("socket")
+    .withIntParameter("domain", PF_INET)
+    .withIntParameter("type", SOCK_STREAM)
+    .withIntParameter("protocol", 0)
+    .andReturnValue(1);
+
+    struct sockaddr_in addr;
+    int sock = 1;
+    mock()
+    .expectOneCall("connect")
+    .withIntParameter("sock", sock)
+    .withIntParameter("addr.sin_family", AF_INET)
+    .withIntParameter("addr.sin_addr.s_addr", inet_addr(ip))
+    .withIntParameter("addr.sin_port", htons(port))
+    .withIntParameter("len", sizeof(addr))
+    .andReturnValue(1);
+
+    int req_size = 60;
+
+    mock()
+    .expectOneCall("send")
+    .withIntParameter("sock", sock)
+    .withParameter("req_mesg", (const void *)req_mesg)
+    .withIntParameter("size", req_size)
+    .withIntParameter("flags", 0)
+    .andReturnValue(60);
+   
+    int total_recv_size = 0;
+    ssize_t size = (ssize_t)sizeof(res_mesg);
+
+    mock()
+    .expectOneCall("recv")
+    .withIntParameter("sock", sock)
+    .withParameter("mesg", (void *)&res_mesg[total_recv_size])
+    .withIntParameter("size", MAX_RESPONSE_SIZE)
+    .withIntParameter("flags", 0)
+    .andReturnValue(size);
+
+    mock()
+    .expectOneCall("recv")
+    .ignoreOtherParameters()
+    .andReturnValue(0);
+
+    mock()
+    .expectOneCall("close")
+    .withIntParameter("sock", sock)
+    .andReturnValue(-1);
+
+    int status = do_webclient(req_mesg, res_mesg, ip, port, path);
+    CHECK_EQUAL(CLOSE_ERROR, status);
+    mock().checkExpectations();
+}
+
+TEST(testWebClient, doWebClientSuccess)
+{
+    char *ip = "0.0.0.0";
+    int port = 8080;
+    char *path = "/";
+    char req_mesg[MAX_REQUEST_SIZE];
+    char res_mesg[MAX_RESPONSE_SIZE];
+
+    mock()
+    .expectOneCall("socket")
+    .withIntParameter("domain", PF_INET)
+    .withIntParameter("type", SOCK_STREAM)
+    .withIntParameter("protocol", 0)
+    .andReturnValue(1);
+
+    struct sockaddr_in addr;
+    int sock = 1;
+    mock()
+    .expectOneCall("connect")
+    .withIntParameter("sock", sock)
+    .withIntParameter("addr.sin_family", AF_INET)
+    .withIntParameter("addr.sin_addr.s_addr", inet_addr(ip))
+    .withIntParameter("addr.sin_port", htons(port))
+    .withIntParameter("len", sizeof(addr))
+    .andReturnValue(1);
+
+    int req_size = 60;
+
+    mock()
+    .expectOneCall("send")
+    .withIntParameter("sock", sock)
+    .withParameter("req_mesg", (const void *)req_mesg)
+    .withIntParameter("size", req_size)
+    .withIntParameter("flags", 0)
+    .andReturnValue(60);
+   
+    int total_recv_size = 0;
+    ssize_t size = (ssize_t)sizeof(res_mesg);
+
+    mock()
+    .expectOneCall("recv")
+    .withIntParameter("sock", sock)
+    .withParameter("mesg", (void *)&res_mesg[total_recv_size])
+    .withIntParameter("size", MAX_RESPONSE_SIZE)
+    .withIntParameter("flags", 0)
+    .andReturnValue(size);
+
+    mock()
+    .expectOneCall("recv")
+    .ignoreOtherParameters()
+    .andReturnValue(0);
+
+    mock()
+    .expectOneCall("close")
+    .withIntParameter("sock", sock)
+    .andReturnValue(0);
+
+    int status = do_webclient(req_mesg, res_mesg, ip, port, path);
+    CHECK_EQUAL(CLIENT_SUCCESS, status);
     mock().checkExpectations();
 }
 

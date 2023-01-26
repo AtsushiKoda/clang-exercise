@@ -116,3 +116,50 @@ int closeServer(int sock)
     else
         return 0;
 }
+
+int do_webclient(char *req_mesg, char *res_mesg, char *ip, int port, char *path)
+{
+    int sock = createSocket();
+    if (sock == -1)
+    {
+        fprintf(stderr, "connect error\n");
+        return SOCKET_CONNECTION_ERROR;
+    }
+
+    int conn = connectServer(sock, ip, port);
+    if (conn == -1)
+    {
+        fprintf(stderr, "server connection error\n");
+        return SERVER_CONNECTION_ERROR;
+    }
+
+    int req_size = createRequestMessage(req_mesg, path, ip, port);
+    if (req_size == -1)
+    {
+        fprintf(stderr, "request message error\n");
+        return REQUEST_MESSAGE_ERROR;
+    }
+
+    int send_size = sendRequestMessage(sock, req_mesg, req_size);
+    if (send_size == -1)
+    {
+        fprintf(stderr, "send error\n");
+        return SEND_MESSAGE_ERROR;
+    }
+    
+    int res_size = recvResponseMessage(sock, res_mesg, MAX_RESPONSE_SIZE);
+    if (res_size == -1)
+    {
+        fprintf(stderr, "recv error\n");
+        return RECEIVE_MESSAGE_ERROR;
+    }
+
+    fprintf(stdout, "%s", res_mesg);
+    if (closeServer(sock) == -1)
+    {
+        fprintf(stderr, "close error\n");
+        return CLOSE_ERROR;
+    }
+    else
+        return CLIENT_SUCCESS;
+}

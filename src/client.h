@@ -8,6 +8,17 @@
 #define MAX_REQUEST_SIZE 1024  // とりあえず1KB
 #define MAX_RESPONSE_SIZE 4096 // とりあえず4KB
 
+enum WebClientStatus
+{
+    CLIENT_SUCCESS,
+    SOCKET_CONNECTION_ERROR,
+    SERVER_CONNECTION_ERROR,
+    REQUEST_MESSAGE_ERROR,
+    SEND_MESSAGE_ERROR, 
+    RECEIVE_MESSAGE_ERROR,
+    CLOSE_ERROR,
+};
+
 // CppUMockのために関数ポインタをフィールドに持つ構造体を定義
 struct socket_api
 {
@@ -24,3 +35,4 @@ int createRequestMessage(char *req_mesg, char *path, char *ip, int port);
 int sendRequestMessage(int sock, char *req_mesg, int req_size);
 int recvResponseMessage(int sock, char *res_mesg, int buf_size);
 int closeServer(int sock);
+int do_webclient(char *req_mesg, char *res_mesg, char *ip, int port, char *path);
